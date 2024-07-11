@@ -1,10 +1,14 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt"); // bcrypt is needed for password hashing
 const User = require("./models/User.js");
-const Restauran = require("./models/Restauran.js");
+const Restauran = require("./models/Restauran.js"); // Changed to Restaurant for consistency
 const { authenticateToken } = require("./utils/isAuthorizated.js");
 const cors = require("cors");
+const dotenv = require("dotenv");
+
+dotenv.config();
 const app = express();
 
 app.use(
@@ -16,16 +20,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 mongoose
-  .connect(
-    "mongodb+srv://abdullohqurbonov332:G3FYLzwM03pyAndQ@yelp.dsdfy9i.mongodb.net/?retryWrites=true&w=majority&appName=yelp"
-  )
+  .connect(process.env.MONGO_URL, {})
   .then(() => {
     console.log("DB connected");
   })
   .catch((err) => {
     console.error("Error connecting to database:", err);
   });
-const PORT = 8000;
+
+const PORT = process.env.PORT || 8000;
 
 app.get("/", (req, res) => {
   res.json({
@@ -33,10 +36,11 @@ app.get("/", (req, res) => {
   });
 });
 
-app.post("/create-accaunt", async (req, res) => {
+app.post("/create-account", async (req, res) => {
   try {
     const { username, email, password } = req.body;
     console.log(req.body);
+
     if (!username) {
       return res.status(400).json({
         message: "Username is required",
@@ -61,23 +65,25 @@ app.post("/create-accaunt", async (req, res) => {
     if (isUser) {
       return res.status(400).json({
         error: true,
-        message: "email is already exist",
+        message: "Email already exists",
       });
     }
+
+    const hashedPassword = await bcrypt.hash(password, 10); 
     const user = new User({
       username,
       email,
-      password,
+      password: hashedPassword, 
     });
     await user.save();
 
-    const accessToken = jwt.sign({ user }, "yelpfullstack", {
+    const accessToken = jwt.sign({ user }, process.env.JWT_SECRET, {
       expiresIn: "1d",
     });
 
     return res.json({
-      message: "User addedd successfuly",
-      errro: false,
+      message: "User added successfully",
+      error: false,
       user,
       accessToken,
     });
@@ -102,7 +108,7 @@ app.post("/login", async (req, res) => {
   if (!password) {
     return res.status(400).json({
       error: true,
-      message: "PAsword is required",
+      message: "Password is required",
     });
   }
 
@@ -114,23 +120,27 @@ app.post("/login", async (req, res) => {
       error: true,
     });
   }
-  if (isUser.password != password) {
+
+  const isPasswordValid = await bcrypt.compare(password, isUser.password); 
+
+  if (!isPasswordValid) {
     return res.status(401).json({
       message: "Invalid password",
       error: true,
     });
   }
+
   const user = {
     user: isUser,
   };
 
-  const accessToken = jwt.sign(user, "yelpfullstack", {
+  const accessToken = jwt.sign(user, process.env.JWT_SECRET, {
     expiresIn: "1d",
   });
 
   return res.json({
     error: false,
-    message: "Successfuly login",
+    message: "Successfully logged in",
     accessToken,
     user: isUser,
   });
@@ -146,6 +156,7 @@ app.get("/get-user", authenticateToken, async (req, res) => {
       error: true,
     });
   }
+
   const { username, email, password } = isUser;
 
   return res.json({
@@ -158,7 +169,6 @@ app.get("/get-user", authenticateToken, async (req, res) => {
 app.post("/add-restauran", authenticateToken, async (req, res) => {
   const { name, description } = req.body;
   const { user } = req.user;
-  console.log(user);
 
   if (!name) {
     return res.status(400).json({
@@ -175,17 +185,17 @@ app.post("/add-restauran", authenticateToken, async (req, res) => {
   }
 
   try {
-    const restaurant = new Restauran({
+    const restauran = new Restauran({
       name,
       description,
       userId: user._id,
     });
-    console.log(restaurant);
-    await restaurant.save();
+    console.log(restauran);
+    await restauran.save();
     return res.json({
       message: "Restaurant added successfully",
       error: false,
-      restaurant,
+      restauran,
     });
   } catch (error) {
     console.error("Error creating restaurant:", error);
@@ -196,16 +206,16 @@ app.post("/add-restauran", authenticateToken, async (req, res) => {
   }
 });
 
-app.get("/get-all-restauran", authenticateToken, async (req, res) => {
+app.get("/get-all-restaurans", authenticateToken, async (req, res) => {
   const { user } = req.user;
 
   try {
-    const restaurants = await Restauran.find({ userId: user._id });
+    const restaurans = await Restauran.find({ userId: user._id });
 
     return res.json({
       message: "All restaurants",
       error: false,
-      restaurants,
+      restaurans,
     });
   } catch (error) {
     console.error("Error retrieving restaurants:", error);
@@ -218,14 +228,14 @@ app.get("/get-all-restauran", authenticateToken, async (req, res) => {
 
 app.delete("/delete-restauran/:id", authenticateToken, async (req, res) => {
   const { user } = req.user;
-  const restaurantId = req.params.id;
+  const restauranId = req.params.id;
 
   try {
-    const restaurant = await Restauran.findOneAndDelete({
-      _id: restaurantId,
+    const restauran = await Restauran.findOneAndDelete({
+      _id: restauranId,
       userId: user._id,
     });
-    if (!restaurant) {
+    if (!restauran) {
       return res
         .status(404)
         .json({ error: true, message: "Restaurant not found" });
@@ -239,6 +249,7 @@ app.delete("/delete-restauran/:id", authenticateToken, async (req, res) => {
     });
   }
 });
+
 app.listen(PORT, () => {
   console.log(`Server has been started on PORT: ${PORT}`);
-})
+});
