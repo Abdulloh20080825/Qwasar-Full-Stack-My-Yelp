@@ -65,11 +65,11 @@ app.post("/create-account", async (req, res) => {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10); 
+    const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({
       username,
       email,
-      password: hashedPassword, 
+      password: hashedPassword,
     });
     await user.save();
 
@@ -117,7 +117,7 @@ app.post("/login", async (req, res) => {
     });
   }
 
-  const isPasswordValid = await bcrypt.compare(password, isUser.password); 
+  const isPasswordValid = await bcrypt.compare(password, isUser.password);
 
   if (!isPasswordValid) {
     return res.status(401).json({
